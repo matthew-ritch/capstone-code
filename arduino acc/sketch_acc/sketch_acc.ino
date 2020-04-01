@@ -1,134 +1,207 @@
 /*
  * source:
  * https://howtomechatronics.com/tutorials/arduino/arduino-and-mpu6050-accelerometer-and-gyroscope-tutorial/
+ * 
+ * https://learn.sparkfun.com/tutorials/lsm9ds1-breakout-hookup-guide#lsm9ds1-overview
  */
+ 
+#include <SPI.h> // SPI library included for SparkFunLSM9DS1
+#include <Wire.h> // I2C library included for SparkFunLSM9DS1
+#include <SparkFunLSM9DS1.h> // SparkFun LSM9DS1 library
 
-#include <Wire.h>
-const int MPU = 0x68; // MPU6050 I2C address
-float AccX, AccY, AccZ;
-float GyroX, GyroY, GyroZ;
-float MagX, MagY, MagZ
-float accAngleX, accAngleY, gyroAngleX, gyroAngleY, gyroAngleZ;
-float roll, pitch, yaw;
-float AccErrorX, AccErrorY, GyroErrorX, GyroErrorY, GyroErrorZ;
-float elapsedTime, currentTime, previousTime;
-int c = 0;
-void setup() {
-  Serial.begin(19200);
-  Wire.begin();                      // Initialize comunication
-  Wire.beginTransmission(MPU);       // Start communication with MPU6050 // MPU=0x68
-  Wire.write(0x6B);                  // Talk to the register 6B
-  Wire.write(0x00);                  // Make reset - place a 0 into the 6B register
-  Wire.endTransmission(true);        //end the transmission
-  /* don't need since we are using the default ranges
-  // Configure Accelerometer Sensitivity - Full Scale Range (default +/- 2g)
-  Wire.beginTransmission(MPU);
-  Wire.write(0x1C);                  //Talk to the ACCEL_CONFIG register (1C hex)
-  Wire.write(0x10);                  //Set the register bits as 00010000 (+/- 8g full scale range)
-  Wire.endTransmission(true);
-  // Configure Gyro Sensitivity - Full Scale Range (default +/- 250deg/s)
-  Wire.beginTransmission(MPU);
-  Wire.write(0x1B);                   // Talk to the GYRO_CONFIG register (1B hex)
-  Wire.write(0x10);                   // Set the register bits as 00010000 (1000deg/s full scale)
-  Wire.endTransmission(true);
-  delay(20);
-  */
-  // Call this function if you need to get the IMU error values for your module
-  calculate_IMU_error();
-  delay(20);
-}
-void loop() {
-  // === Read acceleromter data === //
-  Wire.beginTransmission(MPU);
-  Wire.write(0x3B); // Start with register 0x3B (ACCEL_XOUT_H)
-  Wire.endTransmission(false);
-  Wire.requestFrom(MPU, 6, true); // Read 6 registers total, each axis value is stored in 2 registers
-  //For a range of +-2g, we need to divide the raw values by 16384, according to the datasheet
-  AccX = (Wire.read() << 8 | Wire.read()) / 16384.0; // X-axis value
-  AccY = (Wire.read() << 8 | Wire.read()) / 16384.0; // Y-axis value
-  AccZ = (Wire.read() << 8 | Wire.read()) / 16384.0; // Z-axis value
-  // Calculating Roll and Pitch from the accelerometer data
-  accAngleX = (atan(AccY / sqrt(pow(AccX, 2) + pow(AccZ, 2))) * 180 / PI) - 0.58; // AccErrorX ~(0.58) See the calculate_IMU_error()custom function for more details
-  accAngleY = (atan(-1 * AccX / sqrt(pow(AccY, 2) + pow(AccZ, 2))) * 180 / PI) + 1.58; // AccErrorY ~(-1.58)
-  // === Read gyroscope data === //
-  previousTime = currentTime;        // Previous time is stored before the actual time read
-  currentTime = millis();            // Current time actual time read
-  elapsedTime = (currentTime - previousTime) / 1000; // Divide by 1000 to get seconds
-  Wire.beginTransmission(MPU);
-  Wire.write(0x43); // Gyro data first register address 0x43
-  Wire.endTransmission(false);
-  Wire.requestFrom(MPU, 6, true); // Read 4 registers total, each axis value is stored in 2 registers
-  GyroX = (Wire.read() << 8 | Wire.read()) / 131.0; // For a 250deg/s range we have to divide first the raw value by 131.0, according to the datasheet
-  GyroY = (Wire.read() << 8 | Wire.read()) / 131.0;
-  GyroZ = (Wire.read() << 8 | Wire.read()) / 131.0;
-  // Correct the outputs with the calculated error values
-  GyroX = GyroX + 0.56; // GyroErrorX ~(-0.56)
-  GyroY = GyroY - 2; // GyroErrorY ~(2)
-  GyroZ = GyroZ + 0.79; // GyroErrorZ ~ (-0.8)
-  // Currently the raw values are in degrees per seconds, deg/s, so we need to multiply by sendonds (s) to get the angle in degrees
-  gyroAngleX = gyroAngleX + GyroX * elapsedTime; // deg/s * s = deg
-  gyroAngleY = gyroAngleY + GyroY * elapsedTime;
-  yaw =  yaw + GyroZ * elapsedTime;
-  // Complementary filter - combine acceleromter and gyro angle values
-  roll = 0.96 * gyroAngleX + 0.04 * accAngleX;
-  pitch = 0.96 * gyroAngleY + 0.04 * accAngleY;
-  
-  // Print the values on the serial monitor
-  Serial.print(roll);
-  Serial.print("/");
-  Serial.print(pitch);
-  Serial.print("/");
-  Serial.println(yaw);
-}
-void calculate_IMU_error() {
-  // We can call this funtion in the setup section to calculate the accelerometer and gyro data error. From here we will get the error values used in the above equations printed on the Serial Monitor.
-  // Note that we should place the IMU flat in order to get the proper values, so that we then can the correct values
-  // Read accelerometer values 200 times
-  while (c < 200) {
-    Wire.beginTransmission(MPU);
-    Wire.write(0x3B);
-    Wire.endTransmission(false);
-    Wire.requestFrom(MPU, 6, true);
-    AccX = (Wire.read() << 8 | Wire.read()) / 16384.0 ;
-    AccY = (Wire.read() << 8 | Wire.read()) / 16384.0 ;
-    AccZ = (Wire.read() << 8 | Wire.read()) / 16384.0 ;
-    // Sum all readings
-    AccErrorX = AccErrorX + ((atan((AccY) / sqrt(pow((AccX), 2) + pow((AccZ), 2))) * 180 / PI));
-    AccErrorY = AccErrorY + ((atan(-1 * (AccX) / sqrt(pow((AccY), 2) + pow((AccZ), 2))) * 180 / PI));
-    c++;
+// Use the LSM9DS1 class to create an object.
+LSM9DS1 imu;
+
+//sets the IMU up for I2C mode, with the default (high) I2C addresses
+// SDO_XM and SDO_G are both pulled high, so our addresses are:
+#define LSM9DS1_M   0x1E // Would be 0x1C if SDO_M is LOW
+#define LSM9DS1_AG  0x6B // Would be 0x6A if SDO_AG is LOW
+
+imu.settings.device.commInterface = IMU_MODE_I2C; // Set mode to I2C
+imu.settings.device.mAddress = LSM9DS1_M; // Set mag address to 0x1E
+imu.settings.device.agAddress = LSM9DS1_AG; // Set ag address to 0x6B
+
+////////////////////////////
+// Sketch Output Settings //
+////////////////////////////
+#define PRINT_CALCULATED
+//#define PRINT_RAW
+#define PRINT_SPEED 250 // 250 ms between prints
+static unsigned long lastPrint = 0; // Keep track of print time
+
+// Earth's magnetic field varies by location. Add or subtract
+// a declination to get a more accurate heading. Calculate
+// your's here:
+// http://www.ngdc.noaa.gov/geomag-web/#declination
+#define DECLINATION 8.23 // Declination (degrees) in Boulder, CO.
+
+//Function definitions
+void printGyro();
+void printAccel();
+void printMag();
+void printAttitude(float ax, float ay, float az, float mx, float my, float mz);
+
+void setup()
+{
+  Serial.begin(115200); //start collection at n baud
+  Wire.begin(); //join the 12C bus as a master
+  //check if communication is happening
+  if (imu.begin() == false) // with no arguments, this uses default addresses (AG:0x6B, M:0x1E) and i2c port (Wire).
+  {
+    Serial.println("Failed to communicate with LSM9DS1.");
+    Serial.println("Double-check wiring.");
+    Serial.println("Default settings in this sketch will " \
+                   "work for an out of the box LSM9DS1 " \
+                   "Breakout, but may need to be modified " \
+                   "if the board jumpers are.");
+    while (1);
   }
-  //Divide the sum by 200 to get the error value
-  AccErrorX = AccErrorX / 200;
-  AccErrorY = AccErrorY / 200;
-  c = 0;
-  // Read gyro values 200 times
-  while (c < 200) {
-    Wire.beginTransmission(MPU);
-    Wire.write(0x43);
-    Wire.endTransmission(false);
-    Wire.requestFrom(MPU, 6, true);
-    GyroX = Wire.read() << 8 | Wire.read();
-    GyroY = Wire.read() << 8 | Wire.read();
-    GyroZ = Wire.read() << 8 | Wire.read();
-    // Sum all readings
-    GyroErrorX = GyroErrorX + (GyroX / 131.0);
-    GyroErrorY = GyroErrorY + (GyroY / 131.0);
-    GyroErrorZ = GyroErrorZ + (GyroZ / 131.0);
-    c++;
+}
+
+void loop()
+{
+  // Update the sensor values whenever new data is available
+  if ( imu.gyroAvailable() )
+  {
+    // To read from the gyroscope,  first call the
+    // readGyro() function. When it exits, it'll update the
+    // gx, gy, and gz variables with the most current data.
+    imu.readGyro();
   }
-  //Divide the sum by 200 to get the error value
-  GyroErrorX = GyroErrorX / 200;
-  GyroErrorY = GyroErrorY / 200;
-  GyroErrorZ = GyroErrorZ / 200;
-  // Print the error values on the Serial Monitor
-  Serial.print("AccErrorX: ");
-  Serial.println(AccErrorX);
-  Serial.print("AccErrorY: ");
-  Serial.println(AccErrorY);
-  Serial.print("GyroErrorX: ");
-  Serial.println(GyroErrorX);
-  Serial.print("GyroErrorY: ");
-  Serial.println(GyroErrorY);
-  Serial.print("GyroErrorZ: ");
-  Serial.println(GyroErrorZ);
+  if ( imu.accelAvailable() )
+  {
+    // To read from the accelerometer, first call the
+    // readAccel() function. When it exits, it'll update the
+    // ax, ay, and az variables with the most current data.
+    imu.readAccel();
+  }
+  if ( imu.magAvailable() )
+  {
+    // To read from the magnetometer, first call the
+    // readMag() function. When it exits, it'll update the
+    // mx, my, and mz variables with the most current data.
+    imu.readMag();
+  }
+
+  if ((lastPrint + PRINT_SPEED) < millis())
+  {
+    printGyro();  // Print "G: gx, gy, gz"
+    printAccel(); // Print "A: ax, ay, az"
+    printMag();   // Print "M: mx, my, mz"
+    // Print the heading and orientation for fun!
+    // Call print attitude. The LSM9DS1's mag x and y
+    // axes are opposite to the accelerometer, so my, mx are
+    // substituted for each other.
+    printAttitude(imu.ax, imu.ay, imu.az,
+                  -imu.my, -imu.mx, imu.mz);
+    Serial.println();
+
+    lastPrint = millis(); // Update lastPrint time
+  }
+}
+
+void printGyro()
+{
+  // Now we can use the gx, gy, and gz variables as we please.
+  // Either print them as raw ADC values, or calculated in DPS.
+  Serial.print("G: ");
+#ifdef PRINT_CALCULATED
+  // If you want to print calculated values, you can use the
+  // calcGyro helper function to convert a raw ADC value to
+  // DPS. Give the function the value that you want to convert.
+  Serial.print(imu.calcGyro(imu.gx), 2);
+  Serial.print(", ");
+  Serial.print(imu.calcGyro(imu.gy), 2);
+  Serial.print(", ");
+  Serial.print(imu.calcGyro(imu.gz), 2);
+  Serial.println(" deg/s");
+#elif defined PRINT_RAW
+  Serial.print(imu.gx);
+  Serial.print(", ");
+  Serial.print(imu.gy);
+  Serial.print(", ");
+  Serial.println(imu.gz);
+#endif
+}
+
+void printAccel()
+{
+  // Now we can use the ax, ay, and az variables as we please.
+  // Either print them as raw ADC values, or calculated in g's.
+  Serial.print("A: ");
+#ifdef PRINT_CALCULATED
+  // If you want to print calculated values, you can use the
+  // calcAccel helper function to convert a raw ADC value to
+  // g's. Give the function the value that you want to convert.
+  Serial.print(imu.calcAccel(imu.ax), 2);
+  Serial.print(", ");
+  Serial.print(imu.calcAccel(imu.ay), 2);
+  Serial.print(", ");
+  Serial.print(imu.calcAccel(imu.az), 2);
+  Serial.println(" g");
+#elif defined PRINT_RAW
+  Serial.print(imu.ax);
+  Serial.print(", ");
+  Serial.print(imu.ay);
+  Serial.print(", ");
+  Serial.println(imu.az);
+#endif
+
+}
+
+void printMag()
+{
+  // Now we can use the mx, my, and mz variables as we please.
+  // Either print them as raw ADC values, or calculated in Gauss.
+  Serial.print("M: ");
+#ifdef PRINT_CALCULATED
+  // If you want to print calculated values, you can use the
+  // calcMag helper function to convert a raw ADC value to
+  // Gauss. Give the function the value that you want to convert.
+  Serial.print(imu.calcMag(imu.mx), 2);
+  Serial.print(", ");
+  Serial.print(imu.calcMag(imu.my), 2);
+  Serial.print(", ");
+  Serial.print(imu.calcMag(imu.mz), 2);
+  Serial.println(" gauss");
+#elif defined PRINT_RAW
+  Serial.print(imu.mx);
+  Serial.print(", ");
+  Serial.print(imu.my);
+  Serial.print(", ");
+  Serial.println(imu.mz);
+#endif
+}
+
+// Calculate pitch, roll, and heading.
+// Pitch/roll calculations take from this app note:
+// http://cache.freescale.com/files/sensors/doc/app_note/AN3461.pdf?fpsp=1
+// Heading calculations taken from this app note:
+// http://www51.honeywell.com/aero/common/documents/myaerospacecatalog-documents/Defense_Brochures-documents/Magnetic__Literature_Application_notes-documents/AN203_Compass_Heading_Using_Magnetometers.pdf
+void printAttitude(float ax, float ay, float az, float mx, float my, float mz)
+{
+  float roll = atan2(ay, az);
+  float pitch = atan2(-ax, sqrt(ay * ay + az * az));
+
+  float heading;
+  if (my == 0)
+    heading = (mx < 0) ? PI : 0;
+  else
+    heading = atan2(mx, my);
+
+  heading -= DECLINATION * PI / 180;
+
+  if (heading > PI) heading -= (2 * PI);
+  else if (heading < -PI) heading += (2 * PI);
+
+  // Convert everything from radians to degrees:
+  heading *= 180.0 / PI;
+  pitch *= 180.0 / PI;
+  roll  *= 180.0 / PI;
+
+  Serial.print("Pitch, Roll: ");
+  Serial.print(pitch, 2);
+  Serial.print(", ");
+  Serial.println(roll, 2);
+  Serial.print("Heading: "); Serial.println(heading, 2);
 }
