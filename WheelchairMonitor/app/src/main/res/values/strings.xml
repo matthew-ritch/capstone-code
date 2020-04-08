@@ -2,6 +2,7 @@
     <string name="app_name">Wheelchair Monitor</string>
     <string name="button_1">Calibrate</string>
     <string name="button_2">Record</string>
-    <string name="button_3">Process data</string>
+    <string name="button_3">Select Data</string>
+    <string name="button_process">Process data</string>
     <string name="button_stop">Stop</string>
 </resources>

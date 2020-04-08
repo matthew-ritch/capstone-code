@@ -40,6 +40,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     Button buttonCalib;
     Button buttonRecord;
     Button buttonProcess;
+    Button buttonSelect;
     Button buttonStop;
     static File toRead = null;
     static Boolean proceed = false;
@@ -65,12 +66,16 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         isRunning = false;
         magFirst = false;
 
+
         manager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
 
         buttonCalib = (Button)findViewById(R.id.button1);
         buttonRecord = (Button)findViewById(R.id.button2);
-        buttonProcess = (Button)findViewById(R.id.button3);
+        buttonSelect = (Button)findViewById(R.id.button3);
         buttonStop = (Button)findViewById(R.id.buttonStop);
+        buttonProcess = (Button)findViewById(R.id.button_process);
+        //initial state
+        buttonProcess.setEnabled(false);
 
         buttonCalib.setOnTouchListener(new View.OnTouchListener() {
             @Override
@@ -161,17 +166,37 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 buttonCalib.setEnabled(true);
                 buttonRecord.setEnabled(true);
                 buttonProcess.setEnabled(true);
-
                 manager.flush(MainActivity.this);
                 manager.unregisterListener(MainActivity.this);
-
+                // check calibration
                 calib_acc = getCalib_acc();
                 Log.d("check calibration acc", String.valueOf(calib_acc[0]) + " " + String.valueOf(calib_acc[1]) + " " + String.valueOf(calib_acc[2]));
                 calib_mag = getCalib_mag();
                 Log.d("check calibration mag", String.valueOf(calib_mag[0]) + " " + String.valueOf(calib_mag[1]) + " " + String.valueOf(calib_mag[2]));
-
                 Log.d(TAG, "previous task stopped\n");
+                return true;
+            }
+        });
 
+        buttonSelect.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View view, MotionEvent motionEvent) {
+                if (motionEvent.getAction() != MotionEvent.ACTION_DOWN) {
+                    return false;
+                }
+                buttonProcess.setEnabled(true);
+                /*//load in calibration file
+                calib_acc = getCalib_acc();
+                Log.d("check calibration", String.valueOf(calib_acc[0]) + " " + String.valueOf(calib_acc[1]) + " " + String.valueOf(calib_acc[2]));
+                calib_mag = getCalib_mag();
+                Log.d("check calibration", String.valueOf(calib_mag[0]) + " " + String.valueOf(calib_mag[1]) + " " + String.valueOf(calib_mag[2]));*/
+
+                //select file
+                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                intent.setType("*/*");
+                startActivityForResult(intent, PICKFILE_RESULT_CODE); //this changes toRead
+                Log.d("check","made it past safr");
+                proceed = false;//reset proceed
                 return true;
             }
         });
@@ -187,30 +212,17 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 Log.d("check calibration", String.valueOf(calib_acc[0]) + " " + String.valueOf(calib_acc[1]) + " " + String.valueOf(calib_acc[2]));
                 calib_mag = getCalib_mag();
                 Log.d("check calibration", String.valueOf(calib_mag[0]) + " " + String.valueOf(calib_mag[1]) + " " + String.valueOf(calib_mag[2]));
-
-                //select file
-                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-                intent.setType("*/*");
-                startActivityForResult(intent, PICKFILE_RESULT_CODE); //this changes toRead
-                Log.d("check","made it past safr");
-                //Read text from file FROM HERE ON  is being called before it should be
-                /*while (!proceed) {
-                    //loop eternal
-                }*/
-                proceed = false;//reset proceed
-                int i = 0;
-                int j = 0;
+                // initialize arrays
                 ArrayList<Double> accX=new ArrayList<Double>();
                 ArrayList<Double> accY=new ArrayList<Double>();
                 ArrayList<Double> accZ=new ArrayList<Double>();
                 ArrayList<Double> accT=new ArrayList<Double>();
-
                 ArrayList<Double> magX=new ArrayList<Double>();
                 ArrayList<Double> magY=new ArrayList<Double>();
                 ArrayList<Double> magZ=new ArrayList<Double>();
                 ArrayList<Double> magT=new ArrayList<Double>();
-
-                if (toRead!=null) { //these lines run before the definition for some reason. not sure it matters for us
+                //read in file
+                if (toRead!=null) {
                     try {
                         Log.d("processing", "to read in not null");
                         BufferedReader br = new BufferedReader(new FileReader(toRead));
@@ -253,7 +265,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     Double len = accT.get(nAcc - 1) - accT.get(0);
                     Log.d("len", String.valueOf(len));
                     if  (nMag>0 & nAcc>0) {
-
                         double Fs_acc = nAcc / len;
                         Log.d("Fs_acc", String.valueOf(Fs_acc));
                         double Fs_mag = nMag / len;
@@ -261,8 +272,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     }
                     double sampratio = Math.floor(nAcc/nMag);
                     //downsample - done in naive way. very consistent 5 mag to 1 acc
-                    //double lenWanted = Math.floor(nAcc/sampratio);
-
                     for (int k = nAcc-1; k-- > 0; ) {
                         //Log.d("k", String.valueOf(k));
                         if ((k%sampratio)!=0) {
