@@ -45,6 +45,17 @@ void printMag();
 void printAttitude(float ax, float ay, float az, float mx, float my, float mz);
 
 float calibrate [7] = {0, 0, 0, 0, 0, 0} //"hold required null character" in end of variable
+float accX []
+int m = 0
+int fs = 60
+int L = 5
+float mZ
+float mZ
+float mZ
+//capacity up to fs*L
+float accX [300] = 0
+float accY [300] = 0
+float accZ [300] = 0
 
 void setup()
 
@@ -65,15 +76,15 @@ void setup()
   }
   //calculate gravity direction/magnitude for first n seconds, to be subtracted later
   int n = 0
-  while (millis() < 2000) {
+  while (millis() < 3000) {
     n+=1;
     //first 3 hold accelerometer, last 3 hold magnetometer. x y z.
     calibrate[0]+= imu.calcAccel(imu.ax)
     calibrate[1]+= imu.calcAccel(imu.ay)
     calibrate[2]+= imu.calcAccel(imu.az)
-    calibrate[3]+= imu.calcAccel(-imu.gy)
-    calibrate[4]+= imu.calcAccel(-imu.gx)
-    calibrate[5]+= imu.calcAccel(imu.gz)
+    calibrate[3]+= imu.calcAccel(-imu.my)
+    calibrate[4]+= imu.calcAccel(-imu.mx)
+    calibrate[5]+= imu.calcAccel(imu.mz)
   // 
   }
   //take average for each one
@@ -88,26 +99,36 @@ void setup()
 
 void loop()
 {
-//decide on some amount of time L to do processing. 5 seconds?
-//decide on some sampling frequency. keep fs*L*3 acceleration points
-//decide if rotate on the fly or rotate every L- would prefer to do on the fly but will change with how fast we can possibly go
-
-//collect new acceleration + mag vectors for L
-
-//rotate each new acceleration vector back to original frame of reference. prefer on the fly
-
-//subtract gravity vector. prefer on the fly
-
-//decide if user was moving for this period
-
-//measure frequency
-
-//measure area swept
-
-
-
-
+  //decide on some amount of time L to do processing. 5 seconds?
+  //decide on some sampling frequency. keep fs*L*3 acceleration points
+  //decide if rotate on the fly or rotate every L- would prefer to do on the fly but will change with how fast we can possibly go
   
+  //collect new acceleration + mag vectors for L
+  mX = imu.calcAccel(-imu.my)
+  mY = imu.calcAccel(-imu.mx)
+  mZ = imu.calcAccel(imu.mz)
+  
+  accX[m] = imu.calcAccel(imu.ax)
+  accY[m] = imu.calcAccel(imu.ax)
+  accZ[m] = imu.calcAccel(imu.ax)
+  
+  //rotate each new acceleration vector back to original frame of reference. prefer on the fly
+  
+  //subtract gravity vector. prefer on the fly
+  
+  //decide if user was moving for this period
+  
+  //measure frequency
+  
+  //measure area swept
+
+
+  m+=1
+
+
+
+
+  //don't need these, kept for reference
   // Update the sensor values whenever new data is available
   if ( imu.gyroAvailable() )
   {
