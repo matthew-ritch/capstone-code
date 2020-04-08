@@ -5,4 +5,5 @@
     <string name="button_3">Select Data</string>
     <string name="button_process">Process data</string>
     <string name="button_stop">Stop</string>
+    <string name="text_enter">File Name</string>
 </resources>

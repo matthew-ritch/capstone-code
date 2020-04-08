@@ -15,9 +15,12 @@ import android.os.Environment;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -42,6 +45,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     Button buttonProcess;
     Button buttonSelect;
     Button buttonStop;
+    EditText editText;
     static File toRead = null;
     static Boolean proceed = false;
     String toReadFold;
@@ -56,6 +60,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     double[] calib_mag = {0, 0, 0};
     static long stoptime = System.currentTimeMillis();
     int PICKFILE_RESULT_CODE = 100;
+    static String runNam = "";
 
 
     @Override
@@ -74,6 +79,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         buttonSelect = (Button)findViewById(R.id.button3);
         buttonStop = (Button)findViewById(R.id.buttonStop);
         buttonProcess = (Button)findViewById(R.id.button_process);
+        editText = (EditText) findViewById(R.id.editText);
         //initial state
         buttonProcess.setEnabled(false);
 
@@ -125,7 +131,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
                     Log.d(TAG, "Loading the writer...\n");
                     try {
-                        writer = new FileWriter(new File(getStorageDir(), "sensors_recording_" + System.currentTimeMillis() + ".csv"));
+                        runNam=editText.getText().toString();
+                        writer = new FileWriter(new File(getStorageDir(), "sensors_recording_" + runNam + ".csv"));
                     } catch (IOException e) {
                         e.printStackTrace();
                         return false;
@@ -317,6 +324,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 return true;
             }
         });
+
+
+
+
 
 
     }
