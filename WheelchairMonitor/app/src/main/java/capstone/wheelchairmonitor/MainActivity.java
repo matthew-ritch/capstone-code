@@ -231,14 +231,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 //read in file
                 if (toRead!=null) {
                     try {
-                        Log.d("processing", "to read in not null");
+                        //Log.d("processing", "to read in not null");
                         BufferedReader br = new BufferedReader(new FileReader(toRead));
                         String line;
 
 
                         while ((line = br.readLine()) != null) {
-                            //Log.d("processing line", line);
-                            String[] values = line.split(";");
+                            Log.d("processing line", line);
+                            String[] values = line.split(",");
                             //extract vectors of measurements
 
                             if (values[1].equals("ACC")) {
@@ -373,7 +373,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
             while ((line = br.readLine()) != null) {
                 //Log.d("getCalib line", line);
-                String[] values = line.split(";");
+                String[] values = line.split(",");
                 //make sure line is an acceleration line
                 //Log.d("getCalib label", values[1]);
                 if  (!values[1].equals("ACC")) {
@@ -407,7 +407,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
             while ((line = br.readLine()) != null) {
 
-                String[] values = line.split(";");
+                String[] values = line.split(",");
                 //make sure line is an acceleration line
                 if  (!values[1].equals("MAG")) {
                     continue;
@@ -442,13 +442,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 switch(evt.sensor.getType()) {
                     case Sensor.TYPE_ACCELEROMETER:
                         if (!magFirst){break;} //mag takes longer to spin up
-                        writer.write(String.format("%d;ACC;%f;%f;%f;%f;%f;%f\n", evt.timestamp, evt.values[0], evt.values[1], evt.values[2], 0.f, 0.f, 0.f));
+                        writer.write(String.format("%d,ACC,%f,%f,%f\n", evt.timestamp, evt.values[0], evt.values[1], evt.values[2]));
                         //Log.d("sensorwriting", "wrote acc\n");
                         break;
                     case Sensor.TYPE_MAGNETIC_FIELD:
                         if (!magFirst){magFirst = true;} //mag takes longer to spin up
                         //timestamp in nanoseconds
-                        writer.write(String.format("%d;MAG;%f;%f;%f;%f;%f;%f\n", evt.timestamp, evt.values[0], evt.values[1], evt.values[2], 0.f, 0.f, 0.f));
+                        writer.write(String.format("%d,MAG,%f,%f,%f\n", evt.timestamp, evt.values[0], evt.values[1], evt.values[2]));
                         //Log.d("sensorwriting", "wrote MAG\n");
                         break;
                 }
