@@ -3,8 +3,8 @@
 clc
 clear
 close all
-%a=calc_polar_area([1,1,1,1,1],[0, pi/2, pi, 3*pi/2, 2*pi]);
-%%frequency data file naming convention: 
+
+%% frequency data file naming convention: 
     %first number means area = [.15m^2, .20m^2]
     %second number means freq = [2Hz, 1.5Hz, 1.0Hz, 0.5Hz]
     %third numer means which replicate with these settings
@@ -44,9 +44,10 @@ remove_avg_speed_stag=true;
 remove_mean_v=false;
 
 
+desired_dT = 5;
 %select the data folder you are processing
-datafolder="sensor_tests_area";
-%datafolder="sensor_tests_frequency";
+%datafolder="sensor_tests_area";
+datafolder="sensor_tests_frequency";
 
 %read file names
 data_files = dir(strcat(datafolder, "/sensors_recording*"));
@@ -73,15 +74,46 @@ for i =1:length(data_files)
     %read in data file
     [~,~,data]=xlsread(strcat(data_files(i).folder, "\", data_files(i).name));
     [acc,mag,fs]=parseData(data);
+    
+    
     %TODO quaternion stuff.
-    %qe = ecompass(acc, mag);
-%     for ii=1:size(acc,1)
-%         viewer(qe(ii));
-%         pause(0.01);
+%     qe = ecompass(acc, mag);
+%     temp = euler(qe(1,:), 'ZYX', 'frame');
+%         
+%         yaw_c = temp(1);
+%         pitch_c = temp(2);
+%         roll_c = temp(3);
+%     for frame=1:1:1000
+%     
+%         %Convert Quaternion to Roll Pitch Yaw
+%         temp = euler(qe(frame,:), 'ZYX', 'frame');
+%         
+%         yaw = temp(1);
+%         pitch = temp(2);
+%         roll = temp(3);
+%         %Visualize Data On Sphere Or any Other Objects
+%         [x,y,z] = sphere;h = surf(x,y,z);axis('square'); 
+%         title('AOL TEAM')
+%         xlabel('x'); ylabel('y'); zlabel('z');
+%         %Rotate Object
+%         rotate(h,[1,0,0],(roll-roll_c)*180/pi)
+%         rotate(h,[0,1,0],(pitch-pitch_c)*180/pi)
+%         rotate(h,[0,0,1],(yaw-yaw_c)*180/pi+90)
+%         view(0,0);
+%         drawnow
 %     end
+    
+    
     %remove first and last two seconds of data to ignore trial setup and stop time
     acc=acc(200:end-200,:);
     mag=mag(200:end-200,:);
+    
+    %pick random 3 seconds
+    desiredL = ceil(fs*desired_dT);
+    start=randi(size(acc,1)-desiredL);
+    acc=acc(start:start+desiredL,:);
+    mag=mag(start:start+desiredL,:);
+    
     %make time vector
     t_length=size(acc,1)/fs;
     t=0:1/fs:(1/fs)*(size(acc,1)-1);
@@ -155,8 +187,8 @@ for i =1:length(data_files)
         x=x-avg_x;    y=y-avg_y;    z=z-avg_z;
     end
     
-%     figure(); subplot(2,2,1);     plot(t, vx);     title(['x v']);     subplot(2,2,2);    plot(t, vy);    title(['y v']);    subplot(2,2,3);    plot(t, vz);    title(['z v']) ;   
-%     figure();    plot(t, x);    hold on;    plot(t, y);    plot(t, z);    title('Position Data');    xlabel('time (s)');    ylabel('Displacement (m)');    legend({'x','y','z'});    hold off;
+    figure(); subplot(2,2,1);     plot(t, vx);     title(['x v']);     subplot(2,2,2);    plot(t, vy);    title(['y v']);    subplot(2,2,3);    plot(t, vz);    title(['z v']) ;   
+    figure();    plot(t, x);    hold on;    plot(t, y);    plot(t, z);    title('Position Data');    xlabel('time (s)');    ylabel('Displacement (m)');    legend({'x','y','z'});    hold off;
     %plot threespace pattern
     figure();    colormap(copper);    scatter3(x,y,z,3,t);   
     
@@ -169,15 +201,20 @@ for i =1:length(data_files)
     new=floor(length(f)/2);
     f=f(1:new);
     power=power(1:new);    
-    f_dom=f(power==max(power));
+    f_where=f(power>=(1/4)*max(power));
+    p_where=power(power>=(1/4)*max(power));
+    f_dom=sum(f_where.*p_where/sum(p_where));
+    figure();
+    plot(f, power);
     
-    %plot(f, power);
+    %f_dom=sum(f.*abs(X(1:new))/sum(abs(X(1:new))))
+    
     %ways to calculate area
     dist=sum(  sqrt( diff(x).^2 + diff(y).^2 + diff(z).^2 )  ) - sqrt( (x(end)-x(1)).^2 + (y(end)-y(1)).^2 + (z(end)-z(1)).^2 );
     nCycles=t(end)*f_dom;
     avgCirc=dist/nCycles;
+    %assume ellipse with b=a*.5
     a=sqrt(8/5)*avgCirc/pi;
-    %assume ellipse
     area3 = pi*a*a*.5;
     %assume circle
     area2=pi*(avgCirc/(2*pi))^2;
@@ -207,22 +244,22 @@ function [cps, int] = cycle_calculations(x,y,z,t)
     fs=1/(t(2)-t(1));
     %calculate cycles per second in t period
     [vals,locs] = findpeaks(x);
-%     xCycles=sum( vals>0 & [true; diff(locs)/fs>smallest_dt]);
-%     xlocs=locs( vals>0 & [true; diff(locs)/fs>smallest_dt]);
-%     [vals,locs] = findpeaks(y);
-%     yCycles=sum( vals>0 & [true; diff(locs)/fs>smallest_dt]);
-%     ylocs=locs( vals>0 & [true; diff(locs)/fs>smallest_dt]);
-%     [vals,locs] = findpeaks(z);
-%     zCycles=sum(vals>0 & [true; diff(locs)/fs>smallest_dt]);
-%     zlocs=locs(vals>0 & [true; diff(locs)/fs>smallest_dt]);
-    xCycles=sum(  [true; diff(locs)/fs>smallest_dt]);
-    xlocs=locs(  [true; diff(locs)/fs>smallest_dt]);
+    xCycles=sum( vals>0 & [true; diff(locs)/fs>smallest_dt]);
+    xlocs=locs( vals>0 & [true; diff(locs)/fs>smallest_dt]);
     [vals,locs] = findpeaks(y);
-    yCycles=sum(  [true; diff(locs)/fs>smallest_dt]);
-    ylocs=locs(  [true; diff(locs)/fs>smallest_dt]);
+    yCycles=sum( vals>0 & [true; diff(locs)/fs>smallest_dt]);
+    ylocs=locs( vals>0 & [true; diff(locs)/fs>smallest_dt]);
     [vals,locs] = findpeaks(z);
-    zCycles=sum( [true; diff(locs)/fs>smallest_dt]);
-    zlocs=locs( [true; diff(locs)/fs>smallest_dt]);
+    zCycles=sum(vals>0 & [true; diff(locs)/fs>smallest_dt]);
+    zlocs=locs(vals>0 & [true; diff(locs)/fs>smallest_dt]);
+%     xCycles=sum(  [true; diff(locs)/fs>smallest_dt]);
+%     xlocs=locs(  [true; diff(locs)/fs>smallest_dt]);
+%     [vals,locs] = findpeaks(y);
+%     yCycles=sum(  [true; diff(locs)/fs>smallest_dt]);
+%     ylocs=locs(  [true; diff(locs)/fs>smallest_dt]);
+%     [vals,locs] = findpeaks(z);
+%     zCycles=sum( [true; diff(locs)/fs>smallest_dt]);
+%     zlocs=locs( [true; diff(locs)/fs>smallest_dt]);
     
     cps=mean([xCycles,yCycles,zCycles])/t(end);
     %calculate pushing area in last n seconds
@@ -230,6 +267,7 @@ function [cps, int] = cycle_calculations(x,y,z,t)
     %for each cycle and integrate change in r by change in theta
     
     %don't do first
+    int=0;
     for i=2:length(xlocs)-1
         xhere=x(xlocs(i):xlocs(i+1));
         yhere=y(xlocs(i):xlocs(i+1));
