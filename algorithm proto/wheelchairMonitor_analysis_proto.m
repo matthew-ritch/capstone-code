@@ -38,7 +38,7 @@ close all
 
 detrend_v=true;
 
-remove_gravity=false; %keep this
+remove_gravity=true; %keep this
 remove_mean_acc=false;
 lowpass_acc = true;
 highpass_acc = false;
@@ -56,12 +56,12 @@ remove_avg_speed_stag=false;
 remove_mean_v=true;
 
 %length of time to select from full series
-desired_dT = 10;
+
 
 %% select the data folder you are processing
 %both of these contain their own calibration file
-datafolder="sensor_tests_area";
-%datafolder="sensor_tests_frequency";
+%datafolder="sensor_tests_area";
+datafolder="sensor_tests_frequency";
 %datafolder="sensor_tests_activities";
 
 %% read file names
@@ -90,7 +90,7 @@ for i =1:length(data_files)
     %read in data file
     [~,~,data]=xlsread(strcat(data_files(i).folder, "\", data_files(i).name));
     [acc,mag,fs]=parseData(data);
-    
+    desired_dT = (256/fs);
     
     %TODO quaternion stuff.
 %     qe = ecompass(acc, mag);
@@ -172,7 +172,14 @@ for i =1:length(data_files)
     
       
     %do fft frequency analysis
-    X=fftn([accX/mean(abs(accX)),accY/mean(abs(accY)),accZ/mean(abs(accZ))]);
+    %X=fftn(([accX/mean(abs(accX)),accY/mean(abs(accY)),accZ/mean(abs(accZ))]));
+    %%what we had^^
+    %X = sum(fftn(([accX/mean(abs(accX)),accY/mean(abs(accY)),accZ/mean(abs(accZ))])),2);
+    %X=fftn(sqrt(sum([ (accX/mean(abs(accX))).^2, (accY/mean(abs(accY))).^2 , (accZ/mean(abs(accZ))).^2 ],2)));
+    %X=fftn(sum([accX/mean(abs(accX)),accY/mean(abs(accY)),accZ/mean(abs(accZ))],2));
+    X=fftn(sum([accX,accY,accZ],2));
+    %X=fft(sqrt(sum([accX.^2,accY.^2,accZ.^2],2)));
+    %X=fft(accX.*accY.*accZ);
     n = length(accX);       % number of samples
     f = (0:n-1)*(fs/n);     % frequency range
     power = abs(X).^2/n;    % power of the DFT
@@ -182,6 +189,9 @@ for i =1:length(data_files)
     power=power(1:new);
     % ignore DC
     power(f<(.1))=0;
+    %ignore over physical range
+    power(f>(3))=0;
+    
     f_where=f(power>=(1/4)*max(power));
     p_where=power(power>=(1/4)*max(power));
     f_dom_weighted=sum(f_where.*p_where/sum(p_where));

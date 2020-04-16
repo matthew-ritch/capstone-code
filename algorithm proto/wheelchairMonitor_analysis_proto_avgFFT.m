@@ -10,53 +10,59 @@ close all
     %third numer means which replicate with these settings
     
 %% settings
-%current best combination
-% remove_avg_speed=true;
+% %current best combination - method1 r^2 of .6
+% detrend_v=false;
+% 
 % remove_gravity=true; %keep this
-% remove_mean_acc=true;
+% remove_mean_acc=false;
 % lowpass_acc = true;
+% highpass_acc = true;
 % 
-% highpass_dist = true;
+% highpass_dist = false;
 % highpass_v=false;
-% remove_avg_posn = false;
+% remove_avg_posn = true;
 % 
-% hp_v = .2;
-% hp_dist = .2;
-% lp_acc=20;
+% hp_v = .20;
+% hp_dist = .20;
+% lp_acc=3;
+% hp_acc=.25;
 % 
 % remove_avg_speed_stag=false;
 % remove_mean_v=false;
-% detrend_v=false;
+% 
+% %length of time to select from full series
+% desired_dT = 5;
 
 %tying this combination
 %tying this combination
 
-detrend_v=false;
+detrend_v=true;
 
 remove_gravity=true; %keep this
 remove_mean_acc=false;
 lowpass_acc = true;
-highpass_acc = true;
+highpass_acc = false;
 
-highpass_dist = true;
+highpass_dist = false;
 highpass_v=false;
 remove_avg_posn = false;
 
-hp_v = .25;
-hp_dist = .25;
+hp_v = .20;
+hp_dist = .20;
 lp_acc=3;
 hp_acc=.25;
 
 remove_avg_speed_stag=false;
-remove_mean_v=false;
+remove_mean_v=true;
 
 %length of time to select from full series
-desired_dT = 5;
+
 
 %% select the data folder you are processing
 %both of these contain their own calibration file
 %datafolder="sensor_tests_area";
 datafolder="sensor_tests_frequency";
+%datafolder="sensor_tests_activities";
 
 %% read file names
 data_files = dir(strcat(datafolder, "/sensors_recording*"));
@@ -79,11 +85,12 @@ fdoms=[]; %dominant frequencies
 areas1=[]; %swept areas
 areas2=[]; %swept areas
 areas3=[]; %swept areas
+areas4=[]; %swept areas
 for i =1:length(data_files)
     %read in data file
     [~,~,data]=xlsread(strcat(data_files(i).folder, "\", data_files(i).name));
     [acc,mag,fs]=parseData(data);
-    
+    desired_dT = 40*(256/fs);
     
     %TODO quaternion stuff.
 %     qe = ecompass(acc, mag);
@@ -163,8 +170,16 @@ for i =1:length(data_files)
     
     accX=acc(:,1);     accY=acc(:,2);    accZ=acc(:,3);
     
+      
     %do fft frequency analysis
-    X=fftn([accX,accY,accZ]);
+    %X=fftn(([accX/mean(abs(accX)),accY/mean(abs(accY)),accZ/mean(abs(accZ))]));
+    %%what we had^^
+    %X = sum(fftn(([accX/mean(abs(accX)),accY/mean(abs(accY)),accZ/mean(abs(accZ))])),2);
+    %X=fftn(sqrt(sum([ (accX/mean(abs(accX))).^2, (accY/mean(abs(accY))).^2 , (accZ/mean(abs(accZ))).^2 ],2)));
+    %X=fftn(sum([accX/mean(abs(accX)),accY/mean(abs(accY)),accZ/mean(abs(accZ))],2));
+    X=fftn(sum([accX,accY,accZ,mag(:,1),mag(:,2),mag(:,3)],2));
+    %X=fft(sqrt(sum([accX.^2,accY.^2,accZ.^2],2)));
+    %X=fft(accX.*accY.*accZ);
     n = length(accX);       % number of samples
     f = (0:n-1)*(fs/n);     % frequency range
     power = abs(X).^2/n;    % power of the DFT
@@ -173,127 +188,25 @@ for i =1:length(data_files)
     f=f(1:new);
     power=power(1:new);
     % ignore DC
-    power(1)
+    power(f<(.1))=0;
+    %ignore over physical range
+    power(f>(3))=0;
+    
     f_where=f(power>=(1/4)*max(power));
     p_where=power(power>=(1/4)*max(power));
-    %f_dom=sum(f_where.*p_where/sum(p_where));
+    f_dom_weighted=sum(f_where.*p_where/sum(p_where));
     f_dom=f(power==max(power));
     figure()
     plot(f, power);
-    pause()
+    %pause()
     
-    %low pass to get rid of noise 
-    if lowpass_acc
-        lp=lp_acc;
-        accX = lowpass(accX,lp,fs,'Steepness',.99);    accY = lowpass(accY,lp,fs,'Steepness',.99);    accZ = lowpass(accZ,lp,fs,'Steepness',.99);
-    end
-    
-    if highpass_acc
-        hp=hp_acc;
-        accX = highpass(accX,hp,fs,'Steepness',.99);    accY = highpass(accY,hp,fs,'Steepness',.99);    accZ = highpass(accZ,hp,fs,'Steepness',.99);
-    end
-        
-    figure();    plot(t, accX);    hold on;    plot(t, accY);    plot(t, accZ)
-    title('Acceleration Data Without Gravity');    xlabel('time (s)');    ylabel('Acceleration (m/s2)');    legend({'x','y','z'});    hold off
-
-    %integrate twice for position. subtract average speed to discount drift
-    %get speed by integrating
-    vx=(1/fs)*cumtrapz(accX);    vy=(1/fs)*cumtrapz(accY);    vz=(1/fs)*cumtrapz(accZ);
-    
-    %subtract moving average of speed
-    if remove_avg_speed_stag
-        rvec=1*(rand(1,100)>.5);
-        weight=1/sum(rvec);
-        avg_vx=conv(vx,weight*rvec,'same');    avg_vy=conv(vy,weight*rvec,'same');    avg_vz=conv(vz,weight*rvec,'same');
-        vx=vx-avg_vx;    vy=vy-avg_vy;    vz=vz-avg_vz;
-    end
-    %subtract mean value to prevent creep in integral
-    if remove_mean_v
-        vx=vx-mean(vx);    vy=vy-mean(vy);    vz=vz-mean(vz);
-    end
-    %high pass filter velocity
-    if highpass_v
-        hp=hp_v;
-        vx = highpass(vx,hp,fs,'Steepness',.99);    vy = highpass(vy,hp,fs,'Steepness',.99);    vz = highpass(vz,hp,fs,'Steepness',.99);
-    end
-    if detrend_v
-        vx = detrend(vx);    vy = detrend(vy);    vz = detrend(vz);
-    end
-    
-    %get position
-    x=(1/fs)*cumtrapz(vx);    y=(1/fs)*cumtrapz(vy);    z=(1/fs)*cumtrapz(vz);    
-    
-    %high pass filter displacement
-    if highpass_dist
-        hp=hp_dist;   x=highpass(x,hp,fs,'Steepness',.99);    y=highpass(y,hp,fs,'Steepness',.99);    z=highpass(z,hp,fs,'Steepness',.99);    
-    end
-    
-    %subtract moving average of distance
-    
-    if remove_avg_posn
-        rvec=1*(rand(1,100)>.5);
-        weight=1/sum(rvec);
-        avg_x=conv(x,weight*rvec,'same');    avg_y=conv(y,weight*rvec,'same');    avg_z=conv(z,weight*rvec,'same');
-        x=x-avg_x;    y=y-avg_y;    z=z-avg_z;
-    end
-    
-    figure(); subplot(2,2,1);     plot(t, vx);     title(['x v']);     subplot(2,2,2);    plot(t, vy);    title(['y v']);    subplot(2,2,3);    plot(t, vz);    title(['z v']) ;   
-    figure();    plot(t, x);    hold on;    plot(t, y);    plot(t, z);    title('Position Data');    xlabel('time (s)');    ylabel('Displacement (m)');    legend({'x','y','z'});    hold off;
-    %plot threespace pattern
-    figure();    colormap(copper);    scatter3(x,y,z,3,t);   
-    
-    %do fft frequency analysis on position
-%     X=fftn([x,y,z]);
-%     n = length(x);       % number of samples
-%     f = (0:n-1)*(fs/n);     % frequency range
-%     power = abs(X).^2/n;    % power of the DFT
-%     
-%     new=floor(length(f)/2);
-%     f=f(1:new);
-%     power=power(1:new);    
-%     f_where=f(power>=(1/4)*max(power));
-%     p_where=power(power>=(1/4)*max(power));
-%     f_dom=sum(f_where.*p_where/sum(p_where));
-%     f_dom=f(power==max(power));
-%     figure();
-%     plot(f, power);
-    
-    %f_dom=sum(f.*abs(X(1:new))/sum(abs(X(1:new))))
-    
-    %ways to calculate area
-    [x_plane, y_plane, z_plane] = flatten_cloud(x,y,z);
-    dist=sum(  sqrt( diff(x_plane).^2 + diff(y_plane).^2 + diff(z_plane).^2 )  );% - sqrt( (x(end)-x(1)).^2 + (y(end)-y(1)).^2 + (z(end)-z(1)).^2 );
-    %figure();    colormap(copper);    scatter3(x_plane,y_plane,z_plane,3,t); 
-    
-    nCycles=t(end)*f_dom;
-    avgCirc=dist/nCycles; %circumference
-    %assume ellipse with b=a*.5
-    a=sqrt(8/5)*avgCirc/pi;
-    area3 = pi*a*a*.5;
-    %a4=mean([(1/fs)*sum(abs(x)),(1/fs)*sum(abs(y)),(1/fs)*sum(abs(z))]);
-    a4=(1/fs)*sum((x_plane.^2 + y_plane.^2 + z_plane.^2)) / (nCycles);
-    %assume circle
-    area2=pi*(avgCirc/(2*pi))^2;
-    %do standard
-    [cps, ints] = cycle_calculations(x,y,z,t);
-    %disp(ints)
-    area1=mean(ints);
-    area1=a4;
-    %print results
-    fprintf("file: %s \nf_dom: %d, cps: %d, area: %d\n\n", data_files(i).name, f_dom, cps, area1 );
-    fdoms=[fdoms, f_dom];
-    areas1=[areas1, area1];
-    areas2=[areas2, area2];
-    areas3=[areas3, area3];
-    close all
+    fprintf("file: %s \nf_dom: %d\n\n", data_files(i).name, f_dom);
+    %close all
+    fdoms=[fdoms,f_dom];
 
 end
 
-areas1=reshape(areas1,5,3);
-areas2=reshape(areas2,5,3);
-areas3=reshape(areas3,5,3);
 
-all=[areas1;areas2;areas3];
 
 function [cps, int] = cycle_calculations(x,y,z,t)
     smallest_dt=.25;

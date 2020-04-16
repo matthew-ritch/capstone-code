@@ -5,7 +5,7 @@ close all
 datafolder="sensor_tests_activities";
 %categories={"inactive", "general", "lift", "good", "loop", "choppy"};
 categories={"inactive", "general", "lift", "good", "choppy"};
-len=3; %seconds for each sample
+
 
 %% read file names
 data_files = dir(strcat(datafolder, "/sensors_recording*"));
@@ -36,6 +36,8 @@ if ~exist('data.mat')
         data=data(2000:end-2000,:);
         %parse
         [acc,mag,fs]=parseData(data);
+        len=256/fs; %seconds for each sample
+        
         length_t=(data{end,1}-data{1,1})/(10^9);
         t=0:1/fs:(1/fs)*(size(acc,1)-1);
         %tell user file details
@@ -76,7 +78,8 @@ for i=1:length(samples)
     %only use acceleration (x,y,z) correlations
     R = R(1:(48));
     %add to full feature vector
-    features = [features;mean(trip), rms(trip), std(trip), R];
+    %features = [features;mean(trip), rms(trip), std(trip), R];
+    features = [features;mean(trip),  std(trip)];
 end
 labels=labels';
 lab_back=labels;
@@ -167,15 +170,15 @@ scatter(Y_labs(~correct), Y_pred(~correct),'r');
 xticks(1:max(Y_labs))
 xlim([0,max(Y_labs)+1])
 xticklabels({"Lifting", "Good Form",  "Choppy"}) %"Good Form (loop)",
-xticks(1:max(Y_labs))
-xlim([0,max(Y_labs)+1])
-xticklabels({"Lifting", "Good Form",  "Choppy"}) %"Good Form (loop)",
+yticks(1:max(Y_labs))
+ylim([0,max(Y_labs)+1])
+yticklabels({"Lifting", "Good Form",  "Choppy"}) %"Good Form (loop)",
 title("Detecting User Activity Type")
 n=length(Y_labs);
 ns=[sum(Y_labs==1),sum(Y_labs==2),sum(Y_labs==3)];
 ps=round(100*ns./n);
 fprintf("Detecting User Activity Results:\nData breakdown: %i%% Lifting, %i%% Good, and %i%% choppy.\n%i%% Accuracy.\n\n\n",ps(1),ps(2),ps(3),round(100*sum(correct)/n))
-% 
+%   
 % %% random forest
 % t = templateTree('NumVariablesToSample','all',...
 %     'PredictorSelection','interaction-curvature','Surrogate','on');
@@ -215,7 +218,7 @@ end
 function dataArray = splitData (acc,mag,fs,len,t, cal_acc, cal_mag)
     dataArray={};
     number = floor((size(acc,1)/fs)/len); %how many samples of length len exist
-    [acc, mag] = remove_gravity(acc, mag, cal_acc, cal_mag);
+    %[acc, mag] = remove_gravity(acc, mag, cal_acc, cal_mag);
     
     for i=1:number
        start = (i-1)*len;
