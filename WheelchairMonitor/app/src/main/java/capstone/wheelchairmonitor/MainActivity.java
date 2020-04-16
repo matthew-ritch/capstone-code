@@ -227,29 +227,36 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 calib_mag = getCalib_mag();
                 Log.d("check calibration", String.valueOf(calib_mag[0]) + " " + String.valueOf(calib_mag[1]) + " " + String.valueOf(calib_mag[2]));
                 // initialize matrices
-                Basic2DMatrix accMat = new Basic2DMatrix(0,3);
-                Basic2DMatrix magMat = new Basic2DMatrix(0,3);
+                Basic2DMatrix accMat = Basic2DMatrix.zero(1,3);//0,3
+                Basic2DMatrix magMat = Basic2DMatrix.zero(1,3);//0,3
                 //read in file
                 //http://la4j.org/apidocs/org/la4j/Matrix.html#insertRow(int,%20org.la4j.Vector)
                 List<Double> T = new ArrayList<>();
                 if (toRead!=null) {
                     try {
+                        accMat = Basic2DMatrix.zero(1,3);//0,3
+                        magMat = Basic2DMatrix.zero(1,3);//0,3
                         //Log.d("processing", "to read in not null");
                         BufferedReader br = new BufferedReader(new FileReader(toRead));
                         String line;
-
+                        int i_acc=0; int i_mag=0;
                         while ((line = br.readLine()) != null) {
-                            Log.d("processing line", line);
+                            //Log.d("processing line", line);
                             String[] values = line.split(",");
                             //extract vectors of measurements
 
+
                             if (values[1].equals("ACC")) {
-                                accMat.insertRow(accMat.rows(), Vector.fromArray(new double[]{Double.parseDouble(values[2]), Double.parseDouble(values[3]), Double.parseDouble(values[4])}));
+                                accMat= (Basic2DMatrix) accMat.insertRow(i_acc, Vector.fromArray(new double[]{Double.parseDouble(values[2]), Double.parseDouble(values[3]), Double.parseDouble(values[4])}));
+                                //Log.d("nAcc prog", String.valueOf(accMat.rows()));
                                 T.add(Double.parseDouble(values[0]));
+                                i_acc+=1;
                                 continue;
                             }
                             if (values[1].equals("MAG")) {
-                                magMat.insertRow(accMat.rows(), Vector.fromArray(new double[]{Double.parseDouble(values[2]), Double.parseDouble(values[3]), Double.parseDouble(values[4])}));
+                                magMat= (Basic2DMatrix) magMat.insertRow(i_mag, Vector.fromArray(new double[]{Double.parseDouble(values[2]), Double.parseDouble(values[3]), Double.parseDouble(values[4])}));
+                                //Log.d("nMag prog", String.valueOf(magMat.rows()));
+                                i_mag+=1;
                                 continue;
                             }
 
@@ -261,11 +268,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     //do processing.
 
                     //find effective sampling rates - acc is 500 hz and mag is 100 hz..
-                    int nMag=accMat.rows();
-                    Log.d("nMag", String.valueOf(nMag));
-                    int nAcc=magMat.rows();
-                    Log.d("nAcc", String.valueOf(nAcc));
-                    double len = T.get(nAcc - 1) - T.get(0);
+                    int nAcc=accMat.rows();
+                    Log.d("nAcc post", String.valueOf(nAcc));
+                    int nMag=magMat.rows();
+                    Log.d("nMag post", String.valueOf(nMag));
+                    double len = (T.get(nAcc - 2) - T.get(0))/Math.pow(10,9);//minus two here because of first row of zeros on acc and mag
                     Log.d("len", String.valueOf(len));
                     double Fs_acc = nAcc / len;
                     Log.d("Fs_acc", String.valueOf(Fs_acc));
@@ -274,9 +281,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
                     int sampratio = Math.round(nAcc/nMag);
                     //downsample - done in naive way. very consistent 5 mag to 1 acc. la4j removeRow
-                    int[] slicing = new int[0];
+                    int[] slicing = new int[(int) Math.floor(nAcc/sampratio)];
                     //List<Integer> slicing = new ArrayList<>();
-                    for (int k = 0; k++ < Math.floor(nAcc/sampratio);) {slicing[k]=(k*sampratio);}
+                    for (int k = 0; k++ < Math.floor(nAcc/sampratio)-1;) {slicing[k]=(k*sampratio);}
                     //accMat = accMat;
                     accMat = (Basic2DMatrix) accMat.select(slicing, new int[]{0, 1, 2});
 
@@ -329,13 +336,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         for (int j=0;j++<256;){x[j] = sum_samples.get(j);}
                         //do fft
                         fft.fft(x, y);
+                        double f_dom_this = 0;
                         for (int j=0;j++<128;){
                             double p_this = Math.pow(x[j],2) + Math.pow(y[j],2);
                             if (p_this > p_dom){
                                 p_dom = p_this;
-                                f_dom = j*(Fs_effective/256);
+                                f_dom_this = j*(Fs_effective/256);
                             }
                         }
+
 
                         //do regression stuff
                         Vector features = getFeatures(samples, Fs_effective);
@@ -343,6 +352,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         double active_stat = features.hadamardProduct(simpweights).sum();
                         if (active_stat>1.5){
                             active_n+=1;
+                            f_dom+=f_dom_this;
                             //calculate activity classification
                             double type_active = features.hadamardProduct(actweights).sum();
                             if (type_active<1.5){
@@ -361,10 +371,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     //display results
                     int pct_active = (int) Math.round(100*active_n/n_sampleSets);
                     int [] pcts_active_types = new int[] {(int) Math.round(100 * types_active[0] / active_n),(int) Math.round(100 * types_active[1] / active_n),(int) Math.round(100 * types_active[2] / active_n)};
-
+                    f_dom=f_dom/active_n;
                     String stringResults = String.format("File processed.\nThe user was %i%% active and %i%% inactive during this recorded session.\n" +
-                            "While actively pushing, the user used proper form %i%% of the time, was lifting %i%% of the time, and was choppy %i%% of the time.",
-                            pct_active, 100-pct_active, pcts_active_types[1],pcts_active_types[0],pcts_active_types[2]);
+                            "While actively pushing, the user used proper form %i%% of the time, was lifting %i%% of the time, was choppy %i%% of the time, and averaged a frequency of %d Hz.",
+                            pct_active, 100-pct_active, pcts_active_types[1],pcts_active_types[0],pcts_active_types[2],f_dom);
                     resultsTextView.setText(stringResults);
 
 
