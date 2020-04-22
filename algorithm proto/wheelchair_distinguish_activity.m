@@ -3,8 +3,9 @@ clear
 close all
 
 datafolder="sensor_tests_activities";
-%categories={"inactive", "general", "lift", "good", "loop", "choppy"};
-categories={"inactive", "general", "lift", "good", "choppy"};
+%%categories={"inactive", "general", "lift", "good", "loop", "choppy"};
+categories={'inactive', "general", 'lift', 'good', 'choppy'};
+%categories={"inactive", "general", "lift", "choppy", "good"};
 
 
 %% read file names
@@ -17,14 +18,14 @@ cal_file = dir(strcat(datafolder, "/*calibration*"));
 [cal_acc,cal_mag,cal_fs]=parseData(calib);
 cal_acc=mean(cal_acc);
 %set proper magnitude but use direction
-cal_acc=9.81*cal_acc/norm(cal_acc);
+%cal_acc=9.81*cal_acc/norm(cal_acc);
 cal_mag=mean(cal_mag);
 cal_mag=cal_mag/norm(cal_mag);
 
 samples ={};
 labels=[];
 
-if ~exist('data.mat')
+if ~exist('data.mat')|| false
     for i =1:length(data_files)
         for j=1:length(categories)
             type(j)=~isempty(strfind(data_files(i).name,categories{j}));
@@ -78,8 +79,8 @@ for i=1:length(samples)
     %only use acceleration (x,y,z) correlations
     R = R(1:(48));
     %add to full feature vector
-    %features = [features;mean(trip), rms(trip), std(trip), R];
-    features = [features;mean(trip),  std(trip)];
+    features = [features;mean(trip), rms(trip), std(trip), R];
+    %features = [features;mean(trip),  std(trip)];
 end
 labels=labels';
 lab_back=labels;
@@ -87,6 +88,8 @@ feat_back=features;
 
 %% do simple active vs inactive
 cats=categories(1:2);
+cats{1}='Not Actively Pushing';
+cats{2}='Actively Pushing';
 features=feat_back;
 labels=lab_back;
 labels(labels~=1)=2;
@@ -129,7 +132,25 @@ title("Detecting User Activity")
 n=length(Y_labs);
 ps=[round(100*sum(Y_labs==1)/n),round(100*sum(Y_labs~=1)/n)];
 accuracy = round(100*sum(correct)/n);
+n
 fprintf("Detecting User Activity Results:\nData breakdown: %i%% inactive and %i%% active\n%i%% Accuracy.\n\n\n",ps(1),ps(2),accuracy)
+B=B';
+for i = 1:length(B)
+    fprintf(upper(sprintf("%d, ",B(i))))
+end
+fprintf('\n')
+
+figure()
+Y_labs=cats(Y_labs);
+Y_pred=(round(Y_pred));
+Y_pred(Y_pred==0)=1;
+Y_pred=cats(Y_pred);
+
+cm=confusionchart(Y_labs, Y_pred);
+title("Detecting User Activity")
+
+
+
 %% discriminate types of activity
 cats=categories(3:end);
 features=feat_back;
@@ -167,6 +188,7 @@ figure()
 scatter(Y_labs(correct), Y_pred(correct),'k');
 hold on
 scatter(Y_labs(~correct), Y_pred(~correct),'r');
+hold off
 xticks(1:max(Y_labs))
 xlim([0,max(Y_labs)+1])
 xticklabels({"Lifting", "Good Form",  "Choppy"}) %"Good Form (loop)",
@@ -177,7 +199,25 @@ title("Detecting User Activity Type")
 n=length(Y_labs);
 ns=[sum(Y_labs==1),sum(Y_labs==2),sum(Y_labs==3)];
 ps=round(100*ns./n);
+n
 fprintf("Detecting User Activity Results:\nData breakdown: %i%% Lifting, %i%% Good, and %i%% choppy.\n%i%% Accuracy.\n\n\n",ps(1),ps(2),ps(3),round(100*sum(correct)/n))
+B=B';
+for i = 1:length(B)
+    fprintf(upper(sprintf("%d, ",B(i))))
+end
+fprintf('\n')
+Y_labs=cats(Y_labs);
+Y_pred=(round(Y_pred));
+Y_pred(Y_pred<1)=1;
+Y_pred(Y_pred>3)=3;
+Y_pred=cats(Y_pred);
+
+figure()
+cm=confusionchart(Y_labs, (Y_pred));
+title("Classifying User Activity")
+
+
+
 %   
 % %% random forest
 % t = templateTree('NumVariablesToSample','all',...
@@ -218,7 +258,7 @@ end
 function dataArray = splitData (acc,mag,fs,len,t, cal_acc, cal_mag)
     dataArray={};
     number = floor((size(acc,1)/fs)/len); %how many samples of length len exist
-    %[acc, mag] = remove_gravity(acc, mag, cal_acc, cal_mag);
+    [acc, mag] = remove_gravity(acc, mag, cal_acc, cal_mag);
     
     for i=1:number
        start = (i-1)*len;
@@ -251,7 +291,7 @@ function [acc, mag] = remove_gravity(acc, mag, cal_acc, cal_mag)
     end
     %subtract rotated gravity
     for j=1:length(acc)
-        acc(j,:)=acc(j,:)-(R{j}*cal_acc')';
+        %acc(j,:)=acc(j,:)-(R{j}*cal_acc')';
     end  
 end
 

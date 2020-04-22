@@ -97,6 +97,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     buttonCalib.setEnabled(false);
                     buttonRecord.setEnabled(false);
                     buttonProcess.setEnabled(false);
+                    buttonSelect.setEnabled(false);
 
                     Log.d(TAG, "Loading the writer...\n");
                     try {
@@ -135,6 +136,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     buttonCalib.setEnabled(false);
                     buttonRecord.setEnabled(false);
                     buttonProcess.setEnabled(false);
+                    buttonSelect.setEnabled(false);
 
                     Log.d(TAG, "Loading the writer...\n");
                     try {
@@ -180,6 +182,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 buttonCalib.setEnabled(true);
                 buttonRecord.setEnabled(true);
                 buttonProcess.setEnabled(true);
+                buttonSelect.setEnabled(true);
                 manager.flush(MainActivity.this);
                 manager.unregisterListener(MainActivity.this);
                 // check calibration
@@ -219,8 +222,16 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             @Override
             public boolean onTouch(View view, MotionEvent motionEvent) {
                 if (motionEvent.getAction() != MotionEvent.ACTION_DOWN) {
+
                     return false;
                 }
+
+                buttonCalib.setEnabled(false);
+                buttonRecord.setEnabled(false);
+                buttonProcess.setEnabled(false);
+                buttonSelect.setEnabled(false);
+                resultsTextView.setText("Processing, please wait...");
+
                 //load in calibration file
                 calib_acc = getCalib_acc();
                 Log.d("check calibration", String.valueOf(calib_acc[0]) + " " + String.valueOf(calib_acc[1]) + " " + String.valueOf(calib_acc[2]));
@@ -239,17 +250,25 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         //Log.d("processing", "to read in not null");
                         BufferedReader br = new BufferedReader(new FileReader(toRead));
                         String line;
-                        int i_acc=0; int i_mag=0;
+                        int i_acc=0; int i_mag=0; int ii=0;
                         while ((line = br.readLine()) != null) {
                             //Log.d("processing line", line);
                             String[] values = line.split(",");
                             //extract vectors of measurements
+                            //drop first 100 samples
+                            if (ii<100){
+                                ii++;
+                                continue;
+                            }
+
 
 
                             if (values[1].equals("ACC")) {
-                                accMat= (Basic2DMatrix) accMat.insertRow(i_acc, Vector.fromArray(new double[]{Double.parseDouble(values[2]), Double.parseDouble(values[3]), Double.parseDouble(values[4])}));
-                                //Log.d("nAcc prog", String.valueOf(accMat.rows()));
-                                T.add(Double.parseDouble(values[0]));
+                                //if (i_acc%5 == 0){
+                                    accMat= (Basic2DMatrix) accMat.insertRow(i_acc, Vector.fromArray(new double[]{Double.parseDouble(values[2]), Double.parseDouble(values[3]), Double.parseDouble(values[4])}));
+                                    //Log.d("nAcc prog", String.valueOf(accMat.rows()));
+                                    T.add(Double.parseDouble(values[0]));
+                                //}
                                 i_acc+=1;
                                 continue;
                             }
@@ -260,6 +279,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                                 continue;
                             }
 
+
+
+
                         }
                         br.close();
                     } catch (IOException e) {
@@ -269,75 +291,99 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
                     //find effective sampling rates - acc is 500 hz and mag is 100 hz..
                     int nAcc=accMat.rows();
-                    Log.d("nAcc post", String.valueOf(nAcc));
+                    //Log.d("nAcc post", String.valueOf(nAcc));
                     int nMag=magMat.rows();
-                    Log.d("nMag post", String.valueOf(nMag));
+                    //Log.d("nMag post", String.valueOf(nMag));
                     double len = (T.get(nAcc - 2) - T.get(0))/Math.pow(10,9);//minus two here because of first row of zeros on acc and mag
-                    Log.d("len", String.valueOf(len));
+                    //Log.d("len", String.valueOf(len));
                     double Fs_acc = nAcc / len;
-                    Log.d("Fs_acc", String.valueOf(Fs_acc));
+                    //Log.d("Fs_acc", String.valueOf(Fs_acc));
                     double Fs_mag = nMag / len;
-                    Log.d("Fs_mag", String.valueOf(Fs_mag));
+                    //Log.d("Fs_mag", String.valueOf(Fs_mag));
 
-                    int sampratio = Math.round(nAcc/nMag);
+                    int sampratio = 5;
+
+
                     //downsample - done in naive way. very consistent 5 mag to 1 acc. la4j removeRow
                     int[] slicing = new int[(int) Math.floor(nAcc/sampratio)];
+                    //Log.d("slicing", "make slicing array done.");
                     //List<Integer> slicing = new ArrayList<>();
-                    for (int k = 0; k++ < Math.floor(nAcc/sampratio)-1;) {slicing[k]=(k*sampratio);}
+                    for (int k = 0; k < Math.floor(nAcc/sampratio); k++) {slicing[k]=(k*sampratio);}
                     //accMat = accMat;
                     accMat = (Basic2DMatrix) accMat.select(slicing, new int[]{0, 1, 2});
+                    //
+                    Log.d("slicing", "slicing done.");
+
+                    //Mag=magMat.rows();
+                    //Log.d("nMag down", String.valueOf(nMag));
+                    //nAcc=accMat.rows();
+                    //Log.d("nAcc down", String.valueOf(nAcc));
 
 
                     //make lengths work together - no evidence for failure here yet!
-                    while (accMat.rows()<magMat.rows()) {magMat.removeLastRow();}
-                    while (accMat.rows()>magMat.rows()) {accMat.removeLastRow();}
+                    while (accMat.rows()<magMat.rows()) {magMat = (Basic2DMatrix) magMat.removeLastRow();Log.d("removing", "removed one from magMat");}
+                    while (accMat.rows()>magMat.rows()) {accMat = (Basic2DMatrix) accMat.removeLastRow();Log.d("removing", "removed one from accMat");}
                     nMag=magMat.rows();
-                    Log.d("nMag down", String.valueOf(nMag));
+                    Log.d("nMag downsampled", String.valueOf(nMag));
                     nAcc=accMat.rows();
-                    Log.d("nAcc down", String.valueOf(nAcc));
+                    Log.d("nAcc downsampled", String.valueOf(nAcc));
 
                     //decide which time vector to use, mag or acc. mag is less noisy (?). will make own idealized version
                     double Fs_effective = nAcc/len;
                     //tvec= //for loop
 
                     //remove gravity from acceleration
-                    Basic2DMatrix rotG = new Basic2DMatrix(accMat.rows(),3);
+                    //Basic2DMatrix rotG = new Basic2DMatrix(accMat.rows(),3);
                     //use calib_acc, calib_mag
                     Vector magorient = Vector.fromArray(calib_mag);
-                    magorient.divide(magorient.norm());
+                    magorient=magorient.divide(magorient.norm());
                     Vector g = Vector.fromArray(calib_acc);
                     //step through and subtract rotated gravity from each row
-                    for (int i=0; i++<accMat.rows();){
-                        Vector a = magMat.getRow(i).divide(magMat.getRow(i).norm());
-                        Matrix rotator = RU(a, magorient);
-                        accMat.setRow(i, accMat.getRow(i).subtract(rotator.multiply(g)) );
+                    //fixed: why does this result in diverging acceleration values past g? not just random rotation error (see accmatx    346 going past 20 in some test cases)
+                    if (true) {
+                        for (int i = 0; i < accMat.rows(); i++) {
+                            Vector a = magMat.getRow(i).divide(magMat.getRow(i).norm());
+                            magMat.setRow(i, a);
+                            if (false) {
+                                Matrix rotator = RU(a, magorient);
+                                //Log.d("rotator", rotator.toString());
+                                accMat.setRow(i, accMat.getRow(i).subtract(rotator.multiply(g)));
+                            }
+                        }
                     }
+                    //Log.d("magMat 344", magMat.toString());
+                    //Log.d("accMat 346", accMat.toString());
 
                     Vector sum_params = magMat.getColumn(0).add(magMat.getColumn(1).add(magMat.getColumn(2))).add(accMat.getColumn(0).add(accMat.getColumn(1).add(accMat.getColumn(2))));
-                    Matrix all_params = accMat.insertColumn(3, magMat.getColumn(0)).insertColumn(4, magMat.getColumn(1)).insertColumn(5, magMat.getColumn(2));
+                    Basic2DMatrix all_params = new Basic2DMatrix(accMat.rows(), 6);
+                    //combine matrices
+                    for (int i = 0; i<3; i++){all_params.setColumn(i,accMat.getColumn(i));}
+                    for (int i = 0; i<3; i++){all_params.setColumn(i+3,magMat.getColumn(i));}
 
                     FFT fft = new FFT(256);
                     double [] x = new double[256];
                     double [] y = new double[256];
-                    double [] p = new double[128];
+                    //double [] p = new double[128];
                     double f_dom = 0;
                     double p_dom = 0;
 
                     int n_sampleSets = (int) Math.floor(accMat.rows() / 256);
                     //Vector weights = Vector.fromArray(new double[] {});
-                    Vector simpweights = Vector.fromArray(new double[]{-7.927104e-03, -6.632750e-02, -1.597056e-02, -1.376609e-01, -1.548602e-01, -2.369039e-01, 3.380047e-03, -7.083327e-05, 4.825574e-03, 1.869104e-01, 1.792355e-01, -1.785958e-01, 1.239226e-02, -1.799500e-02, -7.220091e-02, -1.246121e-01, -4.310982e-01, -3.226717e-01, 3.999075e-02, 1.961273e-02, -5.612607e-02, -2.697329e-01, 2.231319e+00, 2.838654e-01, -7.530079e-04, 2.698552e-04, 8.214414e-04, -7.517987e-02, -7.391309e-03, 8.287098e-02, -8.545501e-02, 1.433272e-01, 4.602780e-02, 1.733912e+00, -6.382943e+00, -2.634976e+00, 7.760145e-01,});
-                    Vector actweights = Vector.fromArray(new double[]{5.908857e-02,1.249869e-01,-5.220351e-02,9.694006e-02,-6.417038e-01,1.635168e+00,3.712133e-02,3.700235e-04,4.273163e-02,1.129824e+00,1.463459e-01,7.889935e-01,-6.956490e-02,-8.952888e-02,7.942882e-02,5.986386e-01,-3.906612e-01,-4.999971e-01,4.694541e-01,1.650772e-01,-3.449564e-01,-1.777032e+00,-1.017185e+01,1.119613e+00,-8.652106e-03,2.023478e-03,2.612582e-03,2.647245e-01,-3.258171e-01,3.745326e-01,-6.471418e-01,-5.648614e-01,3.513456e-01,6.502583e+00,2.027482e+01,-5.942074e+00,4.365293e+00});
+                    Vector simpweights = Vector.fromArray(new double[]{5.755775E-03, -6.699398E-02, -1.445151E-02, -3.343928E-02, 2.393271E-01, 1.270501E-02, 2.398644E-03, -4.778000E-03, 2.975728E-03, 1.288486E-01, -2.109809E-01, 2.745229E-01, 7.096885E-03, -5.360486E-02, 5.685067E-03, 1.661659E-01, -8.727464E-01, 3.387613E-01, -7.854814E-03, 4.691318E-02, -7.993375E-02, 2.528162E-01, 2.816685E+00, -6.074269E-01, 3.497633E-04, -7.123845E-04, 7.866524E-04, -1.269227E-01, -3.467171E-04, 1.098068E-01, -1.683645E-02, 2.059982E-01, 1.041541E-01, 3.357326E-01, -8.450184E+00, 2.392375E-01, 1.098618E+00});
+                    Vector actweights = Vector.fromArray(new double[]{2.047621E-01, 2.007387E-01, -9.797865E-02, 5.776776E-01, -1.580921E+00, 5.020793E-01, 2.603543E-03, -2.583976E-05, 1.564483E-03, 1.829132E-01, -1.886063E-02, 3.414378E-01, -6.893037E-02, 2.165704E-02, -6.320788E-02, -1.652131E-02, -1.048148E+00, 7.957762E-02, 1.541733E-01, 2.827244E-01, -3.819768E-01, -8.834009E-01, -6.253969E+00, -7.779593E-01, -2.824386E-03, -1.561134E-03, 2.726407E-03, 3.770149E-01, -6.818273E-01, 2.303266E-01, -1.017210E-02, -7.628410E-01, 1.733548E-01, 4.624819E+00, 5.340712E+00, 8.938623E-01, 5.877527E+00});
+                    Log.d("simpweights",simpweights.toString());
                     double active_n = 0 ;
                     double[] types_active = new double[3];
-                    for (int i = 0; i++<n_sampleSets;){
+                    for (int i = 0; i<n_sampleSets;i++){
+                        Log.d("samplesets", "completed sample " + String.valueOf(i+1)+" of total "+ String.valueOf(n_sampleSets));
                         //slice(int fromRow, int fromColumn, int untilRow, int untilColumn)
                         Matrix samples = all_params.slice(i*256,0,(i+1)*256,6);
                         Vector sum_samples = sum_params.slice(i*256, (i+1)*256);
-                        for (int j=0;j++<256;){x[j] = sum_samples.get(j);}
+                        for (int j=0;j<256;j++){x[j] = sum_samples.get(j);}
                         //do fft
                         fft.fft(x, y);
                         double f_dom_this = 0;
-                        for (int j=0;j++<128;){
+                        for (int j=0;j<26;j++){
                             double p_this = Math.pow(x[j],2) + Math.pow(y[j],2);
                             if (p_this > p_dom){
                                 p_dom = p_this;
@@ -348,13 +394,21 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
                         //do regression stuff
                         Vector features = getFeatures(samples, Fs_effective);
+                        //Log.d("features", features.toString());
                         //calculate active vs inactive classification
-                        double active_stat = features.hadamardProduct(simpweights).sum();
+                        double active_stat = features.copy().hadamardProduct(simpweights).sum();
+                        //Log.d("features", features.toString());
+                        Log.d("active_stat", String.valueOf((active_stat)));
+                        //calculate activity classification
+                        double type_active = features.copy().hadamardProduct(actweights).sum();
+                        //Log.d("features", features.toString());
+                        Log.d("type_active", String.valueOf(type_active));
+
                         if (active_stat>1.5){
                             active_n+=1;
                             f_dom+=f_dom_this;
-                            //calculate activity classification
-                            double type_active = features.hadamardProduct(actweights).sum();
+
+                            //TODO move fft to this part
                             if (type_active<1.5){
                                 types_active[0]+=1;
                             }
@@ -369,80 +423,104 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
                     }
                     //display results
-                    int pct_active = (int) Math.round(100*active_n/n_sampleSets);
-                    int [] pcts_active_types = new int[] {(int) Math.round(100 * types_active[0] / active_n),(int) Math.round(100 * types_active[1] / active_n),(int) Math.round(100 * types_active[2] / active_n)};
-                    f_dom=f_dom/active_n;
-                    String stringResults = String.format("File processed.\nThe user was %i%% active and %i%% inactive during this recorded session.\n" +
-                            "While actively pushing, the user used proper form %i%% of the time, was lifting %i%% of the time, was choppy %i%% of the time, and averaged a frequency of %d Hz.",
-                            pct_active, 100-pct_active, pcts_active_types[1],pcts_active_types[0],pcts_active_types[2],f_dom);
+                    int pct_active = (int) Math.round(100.00*active_n/n_sampleSets);
+                    int [] pcts_active_types = new int[] {(int) Math.round(100 * types_active[0] / active_n),(int) Math.round(100.00 * types_active[1] / active_n),(int) Math.round(100.00 * types_active[2] / active_n)};
+                    if (active_n<1){active_n=1;}
+                    f_dom= f_dom/active_n;
+                    //TODO add all rest case to this
+                    String stringResults;
+                    if (pct_active>0) {
+                        stringResults = String.format("File processed.\nThe user was %d%% active and %d%% inactive during this recorded session.\n" +
+                                        "While actively pushing, the user used proper form %d%% of the time, was lifting %d%% of the time, was choppy %d%% of the time, and averaged a frequency of %f Hz.",
+                                pct_active, 100 - pct_active, pcts_active_types[1], pcts_active_types[0], pcts_active_types[2], f_dom);
+                    }
+                    else {
+                        stringResults = String.format("File processed.\nThe user was not actively pushing during this recorded session.\n");
+                    }
                     resultsTextView.setText(stringResults);
-
-
+                    buttonCalib.setEnabled(true);
+                    buttonRecord.setEnabled(true);
+                    buttonProcess.setEnabled(true);
+                    buttonSelect.setEnabled(true);
                 }
-
-
-
                 return true;
             }
         });
 
 
-
-
-
-
     }
-
     Vector getFeatures(Matrix samples, double fs){
+        fs = 100.000;
         //mean, stdev, rms,
-        int n = samples.rows();
+        Matrix matIn = samples.copy();
+        double n = samples.rows();
+        //Log.d("samples 440", samples.toString());
+        Vector means = sumCols(samples).divide(n);
+        //Log.d("means 441", means.toString());
+        Basic2DMatrix mat_centered = (Basic2DMatrix) subtractCols(samples, means);
         //Vector features = Vector.fromArray(new double[] {samples.getColumn(0).sum()/n, samples.getColumn(1).sum()/n, samples.getColumn(2).sum()/n,samples.getColumn(3).sum()/n, samples.getColumn(4).sum()/n,samples.getColumn(5).sum()/n,samples.getColumn(0).subtract(means.get(0)).sum()/n, samples.getColumn(1).subtract(means.get(1)).sum()/n, samples.getColumn(2).subtract(means.get(2)).sum()/n,samples.getColumn(3).subtract(means.get(3)).sum()/n, samples.getColumn(4).subtract(means.get(4)).sum()/n,samples.getColumn(5).subtract(means.get(5)).sum()/n});
         //Vector stds = Vector.fromArray(new double[] {samples.getColumn(0).subtract(means.get(0)).sum()/n, samples.getColumn(1).subtract(means.get(1)).sum()/n, samples.getColumn(2).subtract(means.get(2)).sum()/n,samples.getColumn(3).subtract(means.get(3)).sum()/n, samples.getColumn(4).subtract(means.get(4)).sum()/n,samples.getColumn(5).subtract(means.get(5)).sum()/n});
-        Matrix ints = integrateCols(samples).multiply(1/fs);
-        Matrix derivs = integrateCols(samples).multiply(fs);
-        samples = samples.insert(derivs, 0, 6, 256, 6).insert(ints, 0, 6, 256, 6);
 
-        Vector means = sumCols(samples).divide(n);
-        Vector stds = sumCols(subtractCols(samples, means)).divide(n);
+        Basic2DMatrix ints = (Basic2DMatrix) integrateCols(mat_centered).divide(fs);
+        //Log.d("ints",ints.toString());
+        Matrix derivs = differentiateCols(mat_centered).multiply(fs);
+        Matrix trip = new Basic2DMatrix(256,18);
+        trip = trip.insert(matIn,0,0,256,6).insert(derivs, 0, 6, 256, 6).insert(ints, 0, 12, 256, 6);
+        Log.d("trip 451", trip.toString());
+        //Log.d("samples 451", samples.toString());
+        means = sumCols(trip).divide(n);
+        //Log.d("means 450", means.toString());
+        Basic2DMatrix diffs = (Basic2DMatrix) subtractCols(trip, means);
+
+
+
+        Vector stds = sumCols(  diffs.hadamardProduct(diffs)  ).divide(n-1);
+        Log.d("stds 456", stds.toString());
         double[] features = new double [37];
         features[36]=1;
-        for (int j=0;j++<18;){features[j] = means.get(j);}
-        for (int j=0;j++<18;){features[j+18] = stds.get(j);}
+        for (int j=0;j<18;j++){features[j] = means.get(j);}
+        for (int j=0;j<18;j++){features[j+18] = Math.sqrt(stds.get(j));}
         //TODO add cross correlations
 
         return Vector.fromArray(features);
     }
 
     Vector sumCols(Matrix mat){
+        //returns the sum for each column.
         double outs [] = new double [mat.columns()];
-        for (int i=0;i++<mat.columns();){
+        for (int i=0;i<mat.columns();i++){
             outs[i] = mat.getColumn(i).sum();
         }
         return Vector.fromArray(outs);
     }
 
     Matrix subtractCols(Matrix mat, Vector v){
-        for (int i=0;i++<mat.rows();){
-            mat.setRow(i,mat.getRow(i).subtract(v));
+        Matrix mat2 = mat.copy();
+        //subtracts vector of values from each row. iterates by row
+        for (int i=0;i<mat2.rows();i++){
+            mat2.setRow(i,mat2.getRow(i).subtract(v));
         }
-        return mat;
+        return mat2;
     }
 
-
-
     Matrix integrateCols(Matrix mat){
+        //Log.d("integrate mat size", String.valueOf(mat.rows())+ " " +String.valueOf(mat.columns()));
         Matrix out = mat.copy();
-        Vector runSum = Vector.zero(mat.columns());
-        for (int i = 0; i++< mat.rows();){
-            runSum = runSum.add(mat.getRow(i));
+        Vector runSum = Vector.zero(out.columns());
+        double fact = 2.00000;
+
+        for (int i = 1; i< out.rows();i++){
+            runSum = runSum.add(  mat.getRow(i).add(mat.getRow(i-1)).divide(fact)  );
             out.setRow(i, runSum);
+            //Log.d("runsum",runSum.toString());
         }
+        //Log.d("int out",out.toString());
         return out;
     }
 
     Matrix differentiateCols(Matrix mat){
         Matrix out = Matrix.zero(mat.rows(),mat.columns());
-        for (int i = 1; i++< mat.rows();){
+        for (int i = 1; i< mat.rows();i++){
             out.setRow(i, mat.getRow(i).subtract(mat.getRow(i-1)));
         }
         return out;
@@ -456,7 +534,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     Matrix RU(Vector A, Vector B){
         //RU = @(A,B) eye(3) + ssc(cross(A,B)) + ssc(cross(A,B))^2*(1-dot(A,B))/(norm(cross(A,B))^2);
-        Matrix added = Basic2DMatrix.identity(3).add(  ssc(cross(A, B))  .  add( ssc(cross(A, B)).power(2).multiply((1 - A.hadamardProduct(B).sum()) / (cross(A, B).norm())))  );
+        double toSubtract = 1.0000;
+        double toDivide= 2.0000;
+        Vector c = cross (A,B);
+        Matrix added = Basic2DMatrix.identity(3).add(  ssc(c))  .  add( ssc(c).power(2).multiply  (  (toSubtract - A.hadamardProduct(B).sum()) / Math.pow(c.norm(),toDivide)  )  );
         return added;
     }
 

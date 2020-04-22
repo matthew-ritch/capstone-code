@@ -198,6 +198,8 @@ for i =1:length(data_files)
     f_dom=f(power==max(power));
     figure()
     plot(f, power);
+    xlabel("Frequency (Hz)")
+    ylabel("Power")
     %pause()
     
     fprintf("file: %s \nf_dom: %d\n\n", data_files(i).name, f_dom);

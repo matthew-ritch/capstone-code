@@ -39,8 +39,8 @@ close all
 detrend_v=true;
 
 remove_gravity=true; %keep this
-remove_mean_acc=false;
-lowpass_acc = true;
+remove_mean_acc=true;
+lowpass_acc = false;
 highpass_acc = false;
 
 highpass_dist = false;
@@ -91,7 +91,7 @@ for i =1:length(data_files)
     [~,~,data]=xlsread(strcat(data_files(i).folder, "\", data_files(i).name));
     [acc,mag,fs]=parseData(data);
     desired_dT = (256/fs);
-    
+    magBack=mag;
     %TODO quaternion stuff.
 %     qe = ecompass(acc, mag);
 %     temp = euler(qe(1,:), 'ZYX', 'frame');
@@ -138,6 +138,7 @@ for i =1:length(data_files)
     %normalize magnetic fields to unit vectors. needs to be unit vector for gravity removal
     %part
     magNorms=sqrt(mag(:,1).^2+ mag(:,2).^2+ mag(:,3).^2);
+    magBack=mag;
     mag=mag./magNorms;
     
     %get translation to rotate gravity into new reference orientation for
@@ -215,6 +216,10 @@ for i =1:length(data_files)
         
     figure();    plot(t, accX);    hold on;    plot(t, accY);    plot(t, accZ)
     title('Acceleration Data Without Gravity');    xlabel('time (s)');    ylabel('Acceleration (m/s2)');    legend({'x','y','z'});    hold off
+    yticklabels([-30, -20,-10,0,10,20])
+    
+    figure();    plot(t, magBack(:,1));    hold on;    plot(t, magBack(:,2));    plot(t, magBack(:,3))
+    title('Magnetometer Data');    xlabel('time (s)');    ylabel('Magnetic Field Strength (uT)');    legend({'x','y','z'});    hold off
 
     %integrate twice for position. subtract average speed to discount drift
     %get speed by integrating
